@@ -19,7 +19,7 @@
 	Reader.OPEN_URI = 2;
 	Reader.OPEN_LOCAL = 3;
 
-	if(typeof require === 'function') {
+	if(typeof require === 'function' && typeof process !== 'undefined') {
 		var fs = require('fs');
 	}
 
