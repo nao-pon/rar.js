@@ -121,7 +121,7 @@
 			type: 'GET',
 			uri: null,
 			responseType: 'text'
-		};
+		},key;
 		if(typeof opts === 'string') {
 			opts = {uri: opts};
 		}
@@ -144,6 +144,22 @@
 				xhr.setRequestHeader('Range', 'bytes=' + options.range[0] + '-' + options.range[1]);
 			} else {
 				xhr.setRequestHeader('Range', 'bytes=' + options.range[0]);
+			}
+		}
+		if(this.options.xhrHeaders) {
+			for (key in this.options.xhrHeaders) {
+				if (this.options.xhrHeaders.hasOwnProperty(key)) {
+					xhr.setRequestHeader(key, this.options.xhrHeaders[key]);
+				}
+			}
+		}
+		if(this.options.xhrFields) {
+			for (key in this.options.xhrFields) {
+				if (this.options.xhrFields.hasOwnProperty(key)) {
+					if (key in xhr) {
+						xhr[key] = this.options.xhrFields[key];
+					}
+				}
 			}
 		}
 		xhr.send();
@@ -332,7 +348,9 @@
 			opts = {file: opts, type: RarArchive.OPEN_FILE};
 		}
 		for(var k in opts) {
-			this.options[k] = opts[k];
+			if(opts.hasOwnProperty(k)) {
+				this.options[k] = opts[k];
+			}
 		}
 
 		if(!this.options.file) {
@@ -356,6 +374,7 @@
 		 */
 		this.file = this.options.file;
 		this.rd = new Reader(this.options.type);
+		this.rd.options = this.options;
 		/*
 		 * Items
 		 */
