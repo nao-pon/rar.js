@@ -13,6 +13,7 @@
 		this.type = type || Reader.OPEN_URI;
 		this.size = null;
 		this.file = null;
+		this.abort = null;
 	};
 
 	Reader.OPEN_FILE = 1;
@@ -487,6 +488,10 @@
 		var cb = function(err, data) {
 			if(err) {
 				if(callback) callback.call(self, err);
+				return;
+			}
+			if (self.abort) {
+				if(callback) callback.call(self, 'Read headers prossesing aborted');
 				return;
 			}
 			var view = new DataView(data),
