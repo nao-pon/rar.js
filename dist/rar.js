@@ -131,8 +131,7 @@
 		for(var k in opts) {
 			options[k] = opts[k];
 		}
-		options.type = options.type.toUpperCase();
-		if (options.type === 'HEAD' || (options.type === 'GET' && options.range)) {
+		if (options.type.toLowerCase() === 'get' && options.range) {
 			options.uri += (options.uri.match(/\?/)? '&' : '?') + '_=' + (+new Date());
 		}
 		var xhr = new XMLHttpRequest();
