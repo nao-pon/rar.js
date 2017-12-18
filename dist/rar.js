@@ -13,13 +13,17 @@
 		this.type = type || Reader.OPEN_URI;
 		this.size = null;
 		this.file = null;
+		this.abort = null;
+		this.buffer = null;
+		this.bufferStart = 0;
+		this.getSize = 128 * 1024;
 	};
 
 	Reader.OPEN_FILE = 1;
 	Reader.OPEN_URI = 2;
 	Reader.OPEN_LOCAL = 3;
 
-	if(typeof require === 'function') {
+	if(typeof require === 'function' && typeof process !== 'undefined') {
 		var fs = require('fs');
 	}
 
@@ -120,12 +124,15 @@
 			type: 'GET',
 			uri: null,
 			responseType: 'text'
-		};
+		},key;
 		if(typeof opts === 'string') {
 			opts = {uri: opts};
 		}
 		for(var k in opts) {
 			options[k] = opts[k];
+		}
+		if (options.type.toLowerCase() === 'get' && options.range) {
+			options.uri += (options.uri.match(/\?/)? '&' : '?') + '_=' + (+new Date());
 		}
 		var xhr = new XMLHttpRequest();
 		xhr.onreadystatechange = function() {
@@ -145,24 +152,77 @@
 				xhr.setRequestHeader('Range', 'bytes=' + options.range[0]);
 			}
 		}
+		if(this.options.xhrHeaders) {
+			for (key in this.options.xhrHeaders) {
+				if (this.options.xhrHeaders.hasOwnProperty(key)) {
+					xhr.setRequestHeader(key, this.options.xhrHeaders[key]);
+				}
+			}
+		}
+		if(this.options.xhrFields) {
+			for (key in this.options.xhrFields) {
+				if (this.options.xhrFields.hasOwnProperty(key)) {
+					if (key in xhr) {
+						xhr[key] = this.options.xhrFields[key];
+					}
+				}
+			}
+		}
 		xhr.send();
 	};
 
 	Reader.prototype.readUri = function(length, position, callback) {
-		this.ajax(
-			{
-				uri: this.file,
-				type: 'GET',
-				responseType: 'arraybuffer',
-				range: [position, position+length-1]
-			},
-			function(err, buffer) {
-				if(err) {
-					return callback(err);
+		var self = this,
+			start,
+			end = Math.min(position + length, self.size),
+			bufEnd = !self.buffer? 0 : self.bufferStart + self.buffer.byteLength,
+			getSize = self.options.xhrGetSize || self.getSize,
+			prevBuffer,
+			bufferConcat = function(segments) {
+				var sumLength = 0, i, whole, pos;
+				for(i = 0; i < segments.length; ++i){
+					sumLength += segments[i].byteLength;
 				}
-				return callback(null, buffer);
+				whole = new Uint8Array(sumLength);
+				pos = 0;
+				for(i = 0; i < segments.length; ++i){
+					whole.set(new Uint8Array(segments[i]),pos);
+					pos += segments[i].byteLength;
+				}
+				return whole.buffer;
+			};
+		if (bufEnd < end) {
+			if (position > bufEnd) {
+				bufEnd = position;
+			} else if (self.buffer && position <= bufEnd) {
+				prevBuffer = self.buffer.slice((bufEnd - position) * -1);
 			}
-		);
+			self.ajax(
+				{
+					uri: self.file,
+					type: 'GET',
+					responseType: 'arraybuffer',
+					range: [bufEnd, Math.min(self.size - 1, bufEnd + Math.max(getSize, length) - 1)]
+				},
+				function(err, buffer) {
+					if(err) {
+						return callback(err);
+					}
+					self.bufferStart = bufEnd;
+					if (prevBuffer) {
+						self.buffer = bufferConcat([prevBuffer, buffer]);
+						self.bufferStart -= prevBuffer.byteLength;
+					} else {
+						self.buffer = buffer;
+					}
+					start = position - self.bufferStart;
+					return callback(null, self.buffer.slice(start, start + length));
+				}
+			);
+		} else {
+			start = position - self.bufferStart;
+			callback(null, self.buffer.slice(start, start + length));
+		}
 	};
 
 	/*
@@ -331,7 +391,9 @@
 			opts = {file: opts, type: RarArchive.OPEN_FILE};
 		}
 		for(var k in opts) {
-			this.options[k] = opts[k];
+			if(opts.hasOwnProperty(k)) {
+				this.options[k] = opts[k];
+			}
 		}
 
 		if(!this.options.file) {
@@ -355,6 +417,7 @@
 		 */
 		this.file = this.options.file;
 		this.rd = new Reader(this.options.type);
+		this.rd.options = this.options;
 		/*
 		 * Items
 		 */
@@ -487,6 +550,10 @@
 		var cb = function(err, data) {
 			if(err) {
 				if(callback) callback.call(self, err);
+				return;
+			}
+			if (self.abort) {
+				if(callback) callback.call(self, 'Read headers prossesing aborted');
 				return;
 			}
 			var view = new DataView(data),
