@@ -263,7 +263,11 @@
 			if(raw) {
 				return str;
 			}
-			return decodeURIComponent(escape(str));
+			try {
+				return decodeURIComponent(escape(str));
+			} catch(e) {
+				return str;
+			}
 		}
 	};
 
@@ -309,7 +313,11 @@
 		if(useBuffer) {
 			return (new Buffer(str)).toString();
 		} else {
-			return decodeURIComponent(escape(str));
+			try {
+				return decodeURIComponent(escape(str));
+			} catch(e) {
+				return str;
+			}
 		}
 	};
 
@@ -527,7 +535,8 @@
 					entry.path = view.getString(nameSize, 32);
 				}
 				if((flags & 0x200) !== 0 && entry.path.indexOf('\x00') !== -1) {
-					entry.path = entry.path.split('\x00')[1];
+					// Since the UNICODE file name that follows from x00 needs to be decoded in a prescribed manner, it returns only the ANSI file name.
+					entry.path = entry.path.split('\x00')[0];
 				}
 				entry.name = entry.path;
 				if(entry.name.indexOf('\\') !== -1) {
